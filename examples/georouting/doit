@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+GNUPLOT=gnuplot
+
+function simulate
+{
+    rm -f ratios georouting.o
+    for d in `echo $2`
+    do
+	 export $1=$d
+	 sum=0
+	 for t in 1 2 3 4 5
+	 do
+	     r=`cnet -e50000sec -TWNg GEOROUTING`
+	     sum=`expr $sum + $r`
+	 done
+	 avg=`expr $sum / 5`
+	 echo "$d	$avg"  >> ratios
+    done
+
+    sed "s,XLABEL,$3," < plotstats.gp > t$$
+    $GNUPLOT t$$
+    rm -f t$$ ratios
+}
+
+#simulate WALKING_SPEED "0.5 1 1.5 2 2.5 3 3.5" "Walking speed (metres/sec)"
+
+simulate PAUSE_TIME "0 5 10 20 30 40 50 60" "Pause time (seconds)"
