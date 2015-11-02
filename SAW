@@ -1,0 +1,43 @@
+compile			= "saw.c"
+
+bandwidth		= 56Kbps,
+
+messagerate             = 100ms,
+propagationdelay        = 200ms,
+
+// probframeloss		= 2,
+probframecorrupt	= 1
+
+host perth {
+    x=100 y=50
+    winx=0, winy=50
+    link to R1 {
+    }
+}
+
+router R1 {
+    address=1,
+    east of perth,
+    winx=200, winy=50
+    link to R2
+}
+
+router R2 {
+    address=2,
+    east east of perth,
+    winx=300, winy=50
+    link to R3
+}
+
+router R3 {
+    address=3,
+    east east east of perth,
+    winx=400, winy=50
+    link to sydney
+}
+
+host sydney {
+    address=4,
+    east east east east of perth,
+    winx=500, winy=50
+}
