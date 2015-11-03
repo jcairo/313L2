@@ -2,9 +2,10 @@ compile			= "stopandwait.c"
 
 bandwidth		= 56Kbps,
 
-messagerate             = 1s,
-propagationdelay        = 2.5s,
-
+messagerate             = 1000ms,
+propagationdelay        = 2500ms,
+minmessagesize = 2000bytes,
+maxmessagesize = 2000bytes,
 // probframeloss		= 2,
 probframecorrupt	= 1
 

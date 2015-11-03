@@ -48,7 +48,10 @@ static  int       	ackexpected		= 0;
 static	int		nextframetosend		= 0;
 static	int		frameexpected		= 0;
 
-
+// This is used in the hosts. It builds and forwards the frame and also
+// sets the timer we need to timeout packets if they are data packets.
+// Routers don't use this to forward packets because they do not timeout packets
+// they only forward them.
 static void transmit_frame(MSG *msg, FRAMEKIND kind, size_t length, int seqno)
 {
     FRAME       f;
@@ -95,6 +98,8 @@ static EVENT_HANDLER(application_ready)
     nextframetosend = 1-nextframetosend;
 }
 
+
+// Handles reading from physical layer when packet arrives.
 static EVENT_HANDLER(physical_ready)
 {
     FRAME        f;
@@ -104,6 +109,14 @@ static EVENT_HANDLER(physical_ready)
     len         = sizeof(FRAME);
     CHECK(CNET_read_physical(&link, &f, &len));
 
+    // If this node is a router forward the message to the next node.
+    if (nodeinfo.nodetype == NT_ROUTER) {
+        int outlink=(link == 1)? nodeinfo.nlinks : 1;
+        CNET_write_physical(outlink, &f, &len);
+        return;
+    }
+
+    // Ensure checksum is ok otherwise ignore the frame.
     checksum    = f.checksum;
     f.checksum  = 0;
     if(CNET_ccitt((unsigned char *)&f, (int)len) != checksum) {
@@ -112,6 +125,10 @@ static EVENT_HANDLER(physical_ready)
     }
 
     switch (f.kind) {
+
+    // If the packet is an ack and the node expected and ack
+    // stop the timeout timer on the packet. Set ack expected to no
+    // and enable application in all nodes?
     case DL_ACK :
         if(f.seq == ackexpected) {
             printf("\t\t\t\tACK received, seq=%d\n", f.seq);
@@ -121,6 +138,9 @@ static EVENT_HANDLER(physical_ready)
         }
 	break;
 
+    // If the packet is a data frame check to see if its the correct sequence number.
+    // If it is write it to the application and reset the frame sequence number
+    // expected. If its the incorrect sequence number ignore the frame.
     case DL_DATA :
         printf("\t\t\t\tDATA received, seq=%d, ", f.seq);
         if(f.seq == frameexpected) {
@@ -131,6 +151,8 @@ static EVENT_HANDLER(physical_ready)
         }
         else
             printf("ignored\n");
+
+        // Why are we transmitting frame if the sequence number may have been wrong?
         transmit_frame(NULL, DL_ACK, 0, f.seq);
 	break;
     }
@@ -151,14 +173,18 @@ static EVENT_HANDLER(showstate)
 
 EVENT_HANDLER(reboot_node)
 {
-    if(nodeinfo.nodenumber > 1) {
-	fprintf(stderr,"This is not a 2-node network!\n");
-	exit(1);
-    }
+ //    if(nodeinfo.nodenumber > 1) {
+	// fprintf(stderr,"This is not a 2-node network!\n");
+	// exit(1);
+ //    }
 
     lastmsg	= calloc(1, sizeof(MSG));
 
-    CHECK(CNET_set_handler( EV_APPLICATIONREADY, application_ready, 0));
+    // Prevent application ready from running in routers since they are only go betweens
+    if (nodeinfo.nodetype == NT_HOST) {
+        CHECK(CNET_set_handler( EV_APPLICATIONREADY, application_ready, 0));
+    }
+
     CHECK(CNET_set_handler( EV_PHYSICALREADY,    physical_ready, 0));
     CHECK(CNET_set_handler( EV_TIMER1,           timeouts, 0));
     CHECK(CNET_set_handler( EV_DEBUG0,           showstate, 0));

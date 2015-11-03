@@ -7,16 +7,19 @@ propagationdelay        = 2500ms,
 minmessagesize = 2000bytes,
 maxmessagesize = 2000bytes,
 // probframeloss		= 0,
-probframecorrupt	= 1
 
 host perth {
     x=100 y=50
     winx=0, winy=50
     link to sydney {
+        probframecorrupt = 1
     }
 }
 
 host sydney {
     east east east east of perth
     winx=550, winy=50
+    link to perth {
+        probframecorrupt = 0
+    }
 }
