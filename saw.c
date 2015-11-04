@@ -73,13 +73,13 @@ static void transmit_frame(MSG *msg, FRAMEKIND kind, size_t length, int seqno, i
 
     switch (kind) {
     case DL_ACK :
-        printf("ACK transmitted, seq=%d\n", seqno);
+        printf("ACK transmitted, seq=%d\n\n", seqno);
 	break;
 
     case DL_DATA: {
 	CnetTime	timeout;
 
-        printf(" DATA transmitted, seq=%d\n", seqno);
+        printf(" DATA transmitted, seq=%d\n\n", seqno);
         memcpy(&f.msg, msg, (int)length);
 
 	timeout = FRAME_SIZE(f)*((CnetTime)8000000 / linkinfo[link].bandwidth) +
@@ -102,7 +102,7 @@ static EVENT_HANDLER(application_ready)
     CHECK(CNET_read_application(&destaddr, lastmsg, &lastlength));
     CNET_disable_application(ALLNODES);
 
-    printf("down from application, seq=%d\n", nextframetosend);
+    printf("down from application, seq=%d\n\n", nextframetosend);
     transmit_frame(lastmsg, DL_DATA, lastlength, nextframetosend, 1);
     nextframetosend = 1-nextframetosend;
 }
@@ -120,12 +120,12 @@ static EVENT_HANDLER(physical_ready)
 
     // Ensure checksum is ok otherwise ignore the frame.
     checksum    = f.checksum;
-    f.checksum  = 0;
+    f.checksum = 0;
     if(CNET_ccitt((unsigned char *)&f, (int)len) != checksum) {
-        printf("\t\t\t\tBAD checksum - frame ignored\n");
+        printf("\nBAD checksum - frame ignored\n\n");
         return;           // bad checksum, ignore frame
     }
-    f.checksum  = CNET_ccitt((unsigned char *)&f, (int)len);
+
 
 /* ROUTER STOP AND WAIT PROTOCOL */
     // If this node is a router forward the message to the next node.
@@ -157,7 +157,7 @@ static EVENT_HANDLER(physical_ready)
 
                 memcpy(lastmsg, &f.msg, (int)f.len);
                 memcpy(&lastlength, &f.len, sizeof((int)f.len));
-                printf("Router has received a data frame and forwarded it. Also sent ack.\n");
+                printf("Router has received a data frame and forwarded it. Also sent ack.\n\n");
             }
         /* /LEFT PROTOCOL */
 
@@ -172,7 +172,7 @@ static EVENT_HANDLER(physical_ready)
                 CNET_stop_timer(lasttimer);
                 printf("Router has received and ack and cleared its buffer.\n");
             } else {
-                printf("Received a frame but Buffer SW_RIGHT_frameexpected != f.seq\n");
+                printf("Received a frame but wrong sequence number\n\n");
             }
         }
         /* /RIGHT PROTOCOL */
@@ -191,7 +191,7 @@ static EVENT_HANDLER(physical_ready)
     // and enable application in all nodes?
     case DL_ACK :
         if(f.seq == ackexpected) {
-            printf("\t\t\t\tACK received, seq=%d\n", f.seq);
+            printf("ACK received, seq=%d\n", f.seq);
             CNET_stop_timer(lasttimer);
             ackexpected = 1-ackexpected;
             CNET_enable_application(ALLNODES);
@@ -202,10 +202,9 @@ static EVENT_HANDLER(physical_ready)
     // If it is write it to the application and reset the frame sequence number
     // expected. If its the incorrect sequence number ignore the frame.
     case DL_DATA :
-        printf("\t\t\t\tDATA received, seq=%d, ", f.seq);
+    printf("Frame expected: %d frame received %d\n", frameexpected, f.seq);
         if(f.seq == frameexpected) {
-            printf("up to application\n");
-            printf("Node number %d\n", nodeinfo.nodenumber);
+            printf("up to application\n\n");
             len = f.len;
             // Write the data packet to the application layer and send an ack.
             CHECK(CNET_write_application(&f.msg, &len));
@@ -213,7 +212,7 @@ static EVENT_HANDLER(physical_ready)
             transmit_frame(NULL, DL_ACK, 0, f.seq, 1);
         }
         else
-            printf("ignored\n");
+            printf("ignored\n\n");
 
         // Why are we transmitting frame if the sequence number may have been wrong?
 	break;
@@ -225,7 +224,7 @@ static EVENT_HANDLER(timeouts)
 {
     printf("timeout, seq=%d\n", ackexpected);
     if (nodeinfo.nodetype == NT_ROUTER) {
-        printf("Data packet timed out. Resending.");
+        printf("Data packet timed out. Resending.\n\n");
     }
 
     // If this is a router send the data out on 2.
