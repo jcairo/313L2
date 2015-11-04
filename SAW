@@ -5,22 +5,21 @@ bandwidth		= 56Kbps,
 messagerate             = 100ms,
 propagationdelay        = 200ms,
 
-probframeloss		= 8,
-probframecorrupt	= 8
+probframeloss		= 0,
+probframecorrupt	= 0
 
 host perth {
     address=0,
     x=100 y=50
     winx=0, winy=50
-    link to R1 {
-    }
+    link to R1
 }
 
 router R1 {
     address=1,
     east of perth,
     winx=200, winy=50
-    link to R2
+    link to R2,
 }
 
 router R2 {

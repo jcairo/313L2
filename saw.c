@@ -40,6 +40,7 @@ typedef struct {
 #define FRAME_SIZE(f)      (FRAME_HEADER_SIZE + f.len)
 
 
+/* STOP AND WAIT VARIABLES FOR HOSTS */
 static  MSG       	*lastmsg;
 static  size_t		lastlength		= 0;
 static  CnetTimerID	lasttimer		= NULLTIMER;
@@ -47,15 +48,23 @@ static  CnetTimerID	lasttimer		= NULLTIMER;
 static  int       	ackexpected		= 0;
 static	int		nextframetosend		= 0;
 static	int		frameexpected		= 0;
+/* /STOP AND WAIT VARIABLES FOR HOSTS */
+
+/* STOP AND WAIT VARIABLES FOR LEFT NEIGHBOUR*/
+static  int     SW_buffer_full       = 0;
+/* STOP AND WAIT VARIABLES FOR LEFT NEIGHBOUR */
+
+/* STOP AND WAIT VARIABLES FOR RIGHT NEIGHBOUR*/
+/* STOP AND WAIT VARIABLES FOR RIGHT NEIGHBOUR */
 
 // This is used in the hosts. It builds and forwards the frame and also
 // sets the timer we need to timeout packets if they are data packets.
 // Routers don't use this to forward packets because they do not timeout packets
 // they only forward them.
-static void transmit_frame(MSG *msg, FRAMEKIND kind, size_t length, int seqno)
+static void transmit_frame(MSG *msg, FRAMEKIND kind, size_t length, int seqno, int link)
 {
     FRAME       f;
-    int		link = 1;
+    // int		link = 1;
 
     f.kind      = kind;
     f.seq       = seqno;
@@ -94,7 +103,7 @@ static EVENT_HANDLER(application_ready)
     CNET_disable_application(ALLNODES);
 
     printf("down from application, seq=%d\n", nextframetosend);
-    transmit_frame(lastmsg, DL_DATA, lastlength, nextframetosend);
+    transmit_frame(lastmsg, DL_DATA, lastlength, nextframetosend, 1);
     nextframetosend = 1-nextframetosend;
 }
 
@@ -109,13 +118,6 @@ static EVENT_HANDLER(physical_ready)
     len         = sizeof(FRAME);
     CHECK(CNET_read_physical(&link, &f, &len));
 
-    // If this node is a router forward the message to the next node.
-    if (nodeinfo.nodetype == NT_ROUTER) {
-        int outlink=(link == 1)? nodeinfo.nlinks : 1;
-        CNET_write_physical(outlink, &f, &len);
-        return;
-    }
-
     // Ensure checksum is ok otherwise ignore the frame.
     checksum    = f.checksum;
     f.checksum  = 0;
@@ -123,7 +125,65 @@ static EVENT_HANDLER(physical_ready)
         printf("\t\t\t\tBAD checksum - frame ignored\n");
         return;           // bad checksum, ignore frame
     }
+    f.checksum  = CNET_ccitt((unsigned char *)&f, (int)len);
 
+/* ROUTER STOP AND WAIT PROTOCOL */
+    // If this node is a router forward the message to the next node.
+    if (nodeinfo.nodetype == NT_ROUTER) {
+
+        /* LEFT PROTOCOL */
+        // Distinguish between left and right protocol
+        // IF the frame is a data frame this is the 'left' protocol
+        if (f.kind == DL_DATA) {
+            // Forward message on to next node, ack sending node and wait for ACK
+            // if buffer is not full otherwise do nothing.
+            if (SW_buffer_full) {
+                return;
+            }
+
+            // Make sure the frame sequence number is correct.
+            // If so increment the next frame expected transmit the data
+            // frame to the next router and send ack to the data sender.
+            if (frameexpected == f.seq){
+                // Increment the frame expected in the left protocol
+                frameexpected = 1-frameexpected;
+
+                // Send the ACK and forward the data frame.
+                transmit_frame(NULL, DL_ACK, 0, f.seq, 1);
+                transmit_frame(&f.msg, DL_DATA, f.len, f.seq, 2);
+
+                // Store the data frame in the buffer until receiving ack from next node.
+                SW_buffer_full = 1;
+
+                memcpy(lastmsg, &f.msg, (int)f.len);
+                memcpy(&lastlength, &f.len, sizeof((int)f.len));
+                printf("Router has received a data frame and forwarded it. Also sent ack.\n");
+            }
+        /* /LEFT PROTOCOL */
+
+        /* RIGHT PROTOCOL */
+        // This protocol handles the Acks received. All it does is clear the buffer if the
+        // correct ack seqno is received.
+        } else {
+            // Chceck whether ack is correct sequence number
+            if (ackexpected == f.seq) {
+                ackexpected = 1-ackexpected;
+                SW_buffer_full = 0;
+                CNET_stop_timer(lasttimer);
+                printf("Router has received and ack and cleared its buffer.\n");
+            } else {
+                printf("Received a frame but Buffer SW_RIGHT_frameexpected != f.seq\n");
+            }
+        }
+        /* /RIGHT PROTOCOL */
+
+        return;
+    }
+
+/* /ROUTER STOP AND WAIT PROTOCOL */
+
+
+/* HOST STOP AND WAIT PROTOCOL */
     switch (f.kind) {
 
     // If the packet is an ack and the node expected and ack
@@ -145,23 +205,36 @@ static EVENT_HANDLER(physical_ready)
         printf("\t\t\t\tDATA received, seq=%d, ", f.seq);
         if(f.seq == frameexpected) {
             printf("up to application\n");
+            printf("Node number %d\n", nodeinfo.nodenumber);
             len = f.len;
+            // Write the data packet to the application layer and send an ack.
             CHECK(CNET_write_application(&f.msg, &len));
             frameexpected = 1-frameexpected;
+            transmit_frame(NULL, DL_ACK, 0, f.seq, 1);
         }
         else
             printf("ignored\n");
 
         // Why are we transmitting frame if the sequence number may have been wrong?
-        transmit_frame(NULL, DL_ACK, 0, f.seq);
 	break;
     }
+/* HOST STOP AND WAIT PROTOCOL */
 }
 
 static EVENT_HANDLER(timeouts)
 {
     printf("timeout, seq=%d\n", ackexpected);
-    transmit_frame(lastmsg, DL_DATA, lastlength, ackexpected);
+    if (nodeinfo.nodetype == NT_ROUTER) {
+        printf("Data packet timed out. Resending.");
+    }
+
+    // If this is a router send the data out on 2.
+    // If this is a host send the data out on 1.
+    if (nodeinfo.nodetype == NT_ROUTER) {
+        transmit_frame(lastmsg, DL_DATA, lastlength, ackexpected, 2);
+    } else {
+        transmit_frame(lastmsg, DL_DATA, lastlength, ackexpected, 1);
+    }
 }
 
 static EVENT_HANDLER(showstate)
