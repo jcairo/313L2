@@ -5,8 +5,8 @@ bandwidth		= 56Kbps,
 messagerate             = 100ms,
 propagationdelay        = 200ms,
 
-probframeloss		= 1,
-probframecorrupt	= 1
+probframeloss		= 0,
+probframecorrupt	= 0
 
 host perth {
     address=0,
