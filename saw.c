@@ -61,6 +61,9 @@ static  int     SW_buffer_full       = 0;
 // sets the timer we need to timeout packets if they are data packets.
 // Routers don't use this to forward packets because they do not timeout packets
 // they only forward them.
+// This has been slightly modified to take in the link number so that
+// Routers and hosts can either send forward or backward depending on the
+// their requirements.
 static void transmit_frame(MSG *msg, FRAMEKIND kind, size_t length, int seqno, int link)
 {
     FRAME       f;
@@ -127,6 +130,8 @@ static EVENT_HANDLER(physical_ready)
     }
 
 
+
+/***************** NEW STOP AND WAIT PROTOCOL CODE ****************/
 /* ROUTER STOP AND WAIT PROTOCOL */
     // If this node is a router forward the message to the next node.
     if (nodeinfo.nodetype == NT_ROUTER) {
@@ -165,6 +170,8 @@ static EVENT_HANDLER(physical_ready)
         // correct ack seqno is received.
         } else {
             // Chceck whether ack is correct sequence number
+            // If so incremenet the next sequence number expected clear the buffer and stop the
+            // timer.
             if (ackexpected == f.seq) {
                 ackexpected = 1-ackexpected;
                 SW_buffer_full = 0;
@@ -178,11 +185,11 @@ static EVENT_HANDLER(physical_ready)
         // Always ack the data frame to prevent deaclock.
         return;
     }
-
 /* /ROUTER STOP AND WAIT PROTOCOL */
+/***************** EDN NEW STOP AND WAIT PROTOCOL CODE ****************/
 
 
-/* HOST STOP AND WAIT PROTOCOL */
+
     switch (f.kind) {
 
     // If the packet is an ack and the node expected and ack
