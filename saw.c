@@ -73,13 +73,13 @@ static void transmit_frame(MSG *msg, FRAMEKIND kind, size_t length, int seqno, i
 
     switch (kind) {
     case DL_ACK :
-        printf("ACK transmitted, seq=%d\n\n", seqno);
+        printf("ACK transmitted, seq=%d\n", seqno);
 	break;
 
     case DL_DATA: {
 	CnetTime	timeout;
 
-        printf(" DATA transmitted, seq=%d\n\n", seqno);
+        printf("DATA transmitted, seq=%d\n", seqno);
         memcpy(&f.msg, msg, (int)length);
 
 	timeout = FRAME_SIZE(f)*((CnetTime)8000000 / linkinfo[link].bandwidth) +
@@ -102,7 +102,7 @@ static EVENT_HANDLER(application_ready)
     CHECK(CNET_read_application(&destaddr, lastmsg, &lastlength));
     CNET_disable_application(ALLNODES);
 
-    printf("down from application, seq=%d\n\n", nextframetosend);
+    printf("down from application, seq=%d\n", nextframetosend);
     transmit_frame(lastmsg, DL_DATA, lastlength, nextframetosend, 1);
     nextframetosend = 1-nextframetosend;
 }
@@ -122,7 +122,7 @@ static EVENT_HANDLER(physical_ready)
     checksum    = f.checksum;
     f.checksum = 0;
     if(CNET_ccitt((unsigned char *)&f, (int)len) != checksum) {
-        printf("\nBAD checksum - frame ignored\n\n");
+        printf("BAD checksum - frame ignored\n\n");
         return;           // bad checksum, ignore frame
     }
 
@@ -137,9 +137,7 @@ static EVENT_HANDLER(physical_ready)
         if (f.kind == DL_DATA) {
             // Forward message on to next node, ack sending node and wait for ACK
             // if buffer is not full otherwise do nothing.
-            if (SW_buffer_full) {
-                return;
-            }
+            if (SW_buffer_full) { return; }
 
             // Make sure the frame sequence number is correct.
             // If so increment the next frame expected transmit the data
@@ -149,15 +147,16 @@ static EVENT_HANDLER(physical_ready)
                 frameexpected = 1-frameexpected;
 
                 // Send the ACK and forward the data frame.
-                transmit_frame(NULL, DL_ACK, 0, f.seq, 1);
-                transmit_frame(&f.msg, DL_DATA, f.len, f.seq, 2);
+                transmit_frame(&f.msg, DL_DATA, f.len, frameexpected, 2);
+                transmit_frame(NULL, DL_ACK, 0, frameexpected, 1);
 
                 // Store the data frame in the buffer until receiving ack from next node.
                 SW_buffer_full = 1;
 
                 memcpy(lastmsg, &f.msg, (int)f.len);
                 memcpy(&lastlength, &f.len, sizeof((int)f.len));
-                printf("Router has received a data frame and forwarded it. Also sent ack.\n\n");
+                printf("Router has received a data frame and forwarded it. Also sent ack.\n");
+                printf("Waiting for ack seqno %d\n\n", f.seq);
             }
         /* /LEFT PROTOCOL */
 
@@ -170,7 +169,7 @@ static EVENT_HANDLER(physical_ready)
                 ackexpected = 1-ackexpected;
                 SW_buffer_full = 0;
                 CNET_stop_timer(lasttimer);
-                printf("Router has received and ack and cleared its buffer.\n");
+                printf("Router has received an ack seqno %d and cleared its buffer.\n\n", f.seq);
             } else {
                 printf("Received a frame but wrong sequence number\n\n");
             }
@@ -202,9 +201,9 @@ static EVENT_HANDLER(physical_ready)
     // If it is write it to the application and reset the frame sequence number
     // expected. If its the incorrect sequence number ignore the frame.
     case DL_DATA :
-    printf("Frame expected: %d frame received %d\n", frameexpected, f.seq);
+    printf("Frame seq# expected: %d frame seq# received: %d\n\n", frameexpected, f.seq);
         if(f.seq == frameexpected) {
-            printf("up to application\n\n");
+            printf("Sent up to application\n\n");
             len = f.len;
             // Write the data packet to the application layer and send an ack.
             CHECK(CNET_write_application(&f.msg, &len));
