@@ -147,8 +147,8 @@ static EVENT_HANDLER(physical_ready)
                 frameexpected = 1-frameexpected;
 
                 // Send the ACK and forward the data frame.
-                transmit_frame(&f.msg, DL_DATA, f.len, frameexpected, 2);
-                transmit_frame(NULL, DL_ACK, 0, frameexpected, 1);
+                transmit_frame(&f.msg, DL_DATA, f.len, f.seq, 2);
+                transmit_frame(NULL, DL_ACK, 0, f.seq, 1);
 
                 // Store the data frame in the buffer until receiving ack from next node.
                 SW_buffer_full = 1;
