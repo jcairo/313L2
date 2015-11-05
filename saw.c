@@ -138,7 +138,8 @@ static EVENT_HANDLER(physical_ready)
             // Forward message on to next node, ack sending node and wait for ACK
             // if buffer is not full otherwise do nothing.
             if (SW_buffer_full) { return; }
-
+            // Always ack the data packet even if the sequence number is incorrect.
+            transmit_frame((MSG *)NULL, DL_ACK, 0, f.seq, 1);
             // Make sure the frame sequence number is correct.
             // If so increment the next frame expected transmit the data
             // frame to the next router and send ack to the data sender.
@@ -148,7 +149,6 @@ static EVENT_HANDLER(physical_ready)
 
                 // Send the ACK and forward the data frame.
                 transmit_frame(&f.msg, DL_DATA, f.len, f.seq, 2);
-                transmit_frame(NULL, DL_ACK, 0, f.seq, 1);
 
                 // Store the data frame in the buffer until receiving ack from next node.
                 SW_buffer_full = 1;
@@ -175,7 +175,7 @@ static EVENT_HANDLER(physical_ready)
             }
         }
         /* /RIGHT PROTOCOL */
-
+        // Always ack the data frame to prevent deaclock.
         return;
     }
 
@@ -190,9 +190,10 @@ static EVENT_HANDLER(physical_ready)
     // and enable application in all nodes?
     case DL_ACK :
         if(f.seq == ackexpected) {
-            printf("ACK received, seq=%d\n", f.seq);
+            printf("ACK received for sequence number %d\n", f.seq);
             CNET_stop_timer(lasttimer);
             ackexpected = 1-ackexpected;
+            printf("Next ack expected is %d\n\n", ackexpected);
             CNET_enable_application(ALLNODES);
         }
 	break;
@@ -201,17 +202,17 @@ static EVENT_HANDLER(physical_ready)
     // If it is write it to the application and reset the frame sequence number
     // expected. If its the incorrect sequence number ignore the frame.
     case DL_DATA :
-    printf("Frame seq# expected: %d frame seq# received: %d\n\n", frameexpected, f.seq);
+    printf("Data seq# expected: %d data seq# received: %d\n", frameexpected, f.seq);
         if(f.seq == frameexpected) {
-            printf("Sent up to application\n\n");
+            printf("Expected and received match. Sent up to application\n\n");
             len = f.len;
             // Write the data packet to the application layer and send an ack.
             CHECK(CNET_write_application(&f.msg, &len));
             frameexpected = 1-frameexpected;
-            transmit_frame(NULL, DL_ACK, 0, f.seq, 1);
         }
         else
-            printf("ignored\n\n");
+            printf("Incorrect sequence number received, ignored frame.\n\n");
+        transmit_frame((MSG *)NULL, DL_ACK, 0, f.seq, 1);
 
         // Why are we transmitting frame if the sequence number may have been wrong?
 	break;
@@ -221,10 +222,8 @@ static EVENT_HANDLER(physical_ready)
 
 static EVENT_HANDLER(timeouts)
 {
-    printf("timeout, seq=%d\n", ackexpected);
-    if (nodeinfo.nodetype == NT_ROUTER) {
-        printf("Data packet timed out. Resending.\n\n");
-    }
+    printf("Data packet timed out. Resending.\n\n");
+    printf("timeout, seq number is %d\n", ackexpected);
 
     // If this is a router send the data out on 2.
     // If this is a host send the data out on 1.
